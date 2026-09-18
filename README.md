@@ -29,6 +29,6 @@ Optional Command-Line Arguments:
         (default: raw)
     
 Work-in-progress Components:
-- Automate the fetch and upload process using AWS Lambda to allow for periodic updating of data without user intervention
 - Use Pandas and SQL to perform analysis on the fetched data and generate insights
 - Create an user dashboard to allow for aesthetic display of information
+- Perhaps allow for the user to set a list of tickers to track (list a watchlist) and use AWS Lambda to automate the fetching, upload, and analysis on a daily basis
