@@ -14,7 +14,6 @@ Usage:
     python dataIngest.py --tickers AAPL MSFT GOOGL --years 5
     python dataIngest.py --bucket ziwen-wang-stock-data-project
 """
-
 import argparse
 import logging
 from datetime import datetime, timedelta

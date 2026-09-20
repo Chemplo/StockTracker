@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+
+<title>Stock Data Ingestion Application</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DynaPuff:wght@400..700&display=swap" rel="stylesheet">
+
+<style>
+    body {
+        font-family: "DynaPuff", -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 16px;
+        background: #707070;
+        color: #ffffff;
+    }
+    h1 { 
+        margin-top: 1vh; 
+        font-size: 24px;
+        font-weight: 700;
+        color: #45a9db;
+        text-shadow: 1px 1px 2px #000;
+    }
+    label {
+        display: block;
+        margin-top: 10px;
+        font-size: 14px;
+        color: #fff;
+    }
+    input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px;
+        margin-top: 4px;
+        background: #2b2b2b;
+        border: 1px solid #444;
+        color: #fff;
+        border-radius: 16px;
+        font-size: 14px;
+    }
+    button {
+        margin-top: 16px;
+        padding: 8px 16px;
+        background: #6a28c2;
+        border: none;
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        border-radius: 16px;
+    }
+    button:disabled {
+        background: #520303;
+        cursor: not-allowed;
+    }
+    #log {
+        margin-top: 16px;
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 16px;
+        padding: 8px;
+        height: 220px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        font-family: "JetBrains Mono", "Consolas", monospace;
+        font-size: 12px;
+    }
+</style>
+</head>
+<body>
+
+<h1>Market Data Ingestion</h1>
+
+<label for="tickers">Tickers (comma-separated)</label>
+<input 
+    id="tickers"
+    value="AAPL,MSFT,GOOGL,AMZN,NVDA,JPM,GS,BAC,XOM,CVX,JNJ,PFE,SPY" 
+/>
+
+<label for="years">Years of history</label>
+<input id="years" value="5" />
+
+<label for="outputDir">Local output folder</label>
+<input id="outputDir" value="data/raw" />
+
+<label for="bucket">S3 bucket (leave blank to skip upload)</label>
+<input id="bucket" value="" />
+
+<label for="prefix">S3 prefix</label>
+<input id="prefix" value="raw" />
+
+<button id="runButton" onclick="runIngestion()">Run Ingestion</button>
+
+<div id="log"></div>
+
+<script>
+// This function is called by runIngest.py every time a new line
+// of output arrives from the running script. It's how the
+// Python side sends log updates into the page,
+function appendLog(text) {
+    const logEl = document.getElementById("log");
+    logEl.textContent += text;
+    logEl.scrollTop = logEl.scrollHeight; // auto-scroll to the bottom
+}
+
+// This function is called when the user clicks the "Run Ingestion" button.
+async function runIngestion() {
+    const button = document.getElementById("runButton");
+    button.disabled = true; // Locks the button
+    document.getElementById("log").textContent = ""; // Clear the log before starting a new run.
+
+    // Gather form values into a plain JS object.
+    const config = {
+        tickers: document.getElementById("tickers").value,
+        years: document.getElementById("years").value,
+        output_dir: document.getElementById("outputDir").value,
+        bucket: document.getElementById("bucket").value,
+        s3_prefix: document.getElementById("prefix").value,
+    };
+
+    // Call the Python-side API to start the ingestion process, passing the config object.
+    try {
+        await pywebview.api.run_ingestion(config);
+    } catch (err) {
+        appendLog("\nJavaScript-side error: " + err + "\n");
+    } finally {
+        button.disabled = false; // Unlocks the button
+    }
+}
+</script>
+
+</body>
+</html>
