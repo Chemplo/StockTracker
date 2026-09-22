@@ -61,7 +61,7 @@ def add_tickers(tickers: list[str]) -> list[str]:
         logger.info(f"Added {added} to watchlist")
     else:
         logger.info("No new tickers added (already present or empty input)")
-    return current
+    return current, added
 
 """
 This function removes one or more tickers from the watchlist and
@@ -86,7 +86,7 @@ def remove_tickers(tickers: list[str]) -> list[str]:
         logger.info(f"Removed {removed} from watchlist")
     else:
         logger.info("No tickers removed (none matched)")
-    return current
+    return current, removed
 
 """
 These functions are currently not used since the API endpoints are designed to
