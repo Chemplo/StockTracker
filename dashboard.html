@@ -24,6 +24,13 @@
         color: #45a9db;
         text-shadow: 1px 1px 2px #000;
     }
+    h2 {
+        margin-top: 1vh;
+        font-size: 20px;
+        font-weight: 700;
+        color: #45a9db;
+        text-shadow: 1px 1px 2px #000;
+    }
     label {
         display: block;
         margin-top: 10px;
@@ -65,8 +72,64 @@
         height: 220px;
         overflow-y: auto;
         white-space: pre-wrap;
-        font-family: "JetBrains Mono", "Consolas", monospace;
+        font-family: "Consolas", monospace;
         font-size: 12px;
+    }
+    hr {
+        margin: 24px 0;
+        border: none;
+        border-top: 1px solid #444;
+    }
+    #watchlistChips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+        min-height: 24px;
+    }
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #2b2b2b;
+        border: 1px solid #444;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 14px;
+    }
+    .chip button {
+        margin: 0;
+        padding: 0 4px;
+        background: transparent;
+        color: #ccc;
+        font-size: 14px;
+        line-height: 1;
+    }
+    .chip button:hover {
+        color: #ff6b6b;
+    }
+    .chip-empty {
+        color: #ccc;
+        font-size: 14px;
+        font-style: italic;
+    }
+    .watchlist-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+    }
+    .watchlist-row input {
+        margin-top: 4px;
+    }
+    .watchlist-row button {
+        margin-top: 4px;
+        white-space: nowrap;
+    }
+    #watchlistStatus {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #ddd;
+        min-height: 16px;
     }
 </style>
 </head>
@@ -95,6 +158,32 @@
 <button id="runButton" onclick="runIngestion()">Run Ingestion</button>
 
 <div id="log"></div>
+
+<hr />
+
+<h2>Watchlist</h2>
+
+<div id="watchlistChips">
+    <span class="chip-empty">Loading...</span>
+</div>
+
+<div id="watchlistStatus"></div>
+
+<div class="watchlist-row">
+    <div style="flex: 1;">
+        <label for="addTickersInput">Add tickers (comma-separated)</label>
+        <input id="addTickersInput" placeholder="e.g. AAPL, MSFT" />
+    </div>
+    <button onclick="submitAddTickers()">Add</button>
+</div>
+
+<div class="watchlist-row">
+    <div style="flex: 1;">
+        <label for="removeTickersInput">Remove tickers (comma-separated)</label>
+        <input id="removeTickersInput" placeholder="e.g. AAPL, MSFT" />
+    </div>
+    <button onclick="submitRemoveTickers()">Remove</button>
+</div>
 
 <script>
 // This function is called by runIngest.py every time a new line
@@ -130,6 +219,184 @@ async function runIngestion() {
         button.disabled = false; // Unlocks the button
     }
 }
+
+// ---------------------------------------------------------------------
+// Watchlist section
+//
+// Unlike the ingestion run above (which goes through pywebview.api),
+// these calls go straight to the Flask backend (app.py) over a normal
+// HTTP fetch, since this is just "call a REST API", exactly like any
+// ordinary webpage would. app.py must be running on localhost:5000
+// for this section to work.
+// ---------------------------------------------------------------------
+
+// Using 127.0.0.1 instead of "localhost" deliberately: on many systems
+// "localhost" resolves to the IPv6 loopback address (::1) before IPv4,
+// and Flask's built-in dev server only listens on IPv4 by default —
+// so a request to "localhost" can hang or fail while 127.0.0.1 (IPv4,
+// unambiguous) connects immediately.
+const API_BASE = "http://127.0.0.1:5000";
+
+function setWatchlistStatus(text, isError = false) {
+    const el = document.getElementById("watchlistStatus");
+    el.textContent = text;
+    el.style.color = isError ? "#ff6b6b" : "#ddd";
+}
+
+// Turns a comma-separated input string into a clean list of tickers:
+// trims whitespace around each one, uppercases them, and drops any
+// empty entries (e.g. from a trailing comma or repeated spaces).
+function parseTickerInput(rawValue) {
+    return rawValue
+        .split(",")
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t.length > 0);
+}
+
+async function loadWatchlist() {
+    const container = document.getElementById("watchlistChips");
+
+    try {
+        const response = await fetch(`${API_BASE}/api/watchlist`);
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+        const data = await response.json();
+        renderWatchlist(data.tickers);
+    } catch (err) {
+        container.innerHTML = "";
+        const span = document.createElement("span");
+        span.className = "chip-empty";
+        span.textContent = "Couldn't reach the backend — is app.py running?";
+        container.appendChild(span);
+        setWatchlistStatus(String(err), true);
+    }
+}
+
+function renderWatchlist(tickers) {
+    const container = document.getElementById("watchlistChips");
+    container.innerHTML = "";
+
+    if (!tickers || tickers.length === 0) {
+        const span = document.createElement("span");
+        span.className = "chip-empty";
+        span.textContent = "No tickers in your watchlist yet.";
+        container.appendChild(span);
+        return;
+    }
+
+    // Build one "chip" per ticker, each with its own small (x) button
+    // so a single ticker can be removed with one click, in addition to
+    // the bulk remove input below for removing several at once.
+    tickers.forEach(ticker => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+
+        const label = document.createElement("span");
+        label.textContent = ticker;
+        chip.appendChild(label);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "\u00d7"; // "x" character
+        removeBtn.title = `Remove ${ticker}`;
+        removeBtn.onclick = () => removeTickers([ticker]);
+        chip.appendChild(removeBtn);
+
+        container.appendChild(chip);
+    });
+}
+
+async function submitAddTickers() {
+    const input = document.getElementById("addTickersInput");
+    const tickers = parseTickerInput(input.value);
+
+    if (tickers.length === 0) {
+        setWatchlistStatus("Enter at least one ticker to add.", true);
+        return;
+    }
+
+    setWatchlistStatus(`Adding ${tickers.join(", ")}...`);
+
+    try {
+        const response = await fetch(`${API_BASE}/api/watchlist`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tickers }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `Server responded with ${response.status}`);
+        }
+
+        // fetch_results tells us what actually happened per ticker:
+        // "ok" = fetched and uploaded, "already_tracked" = no-op
+        // (already in the watchlist, nothing re-fetched), anything else
+        // = a genuine failure. Only the last category should read as
+        // an error to the user.
+        const alreadyTracked = Object.entries(data.fetch_results || {})
+            .filter(([, status]) => status === "already_tracked")
+            .map(([ticker]) => ticker);
+        const failed = Object.entries(data.fetch_results || {})
+            .filter(([, status]) => status !== "ok" && status !== "already_tracked")
+            .map(([ticker]) => ticker);
+
+        if (failed.length > 0) {
+            setWatchlistStatus(`Added, but data fetch failed for: ${failed.join(", ")}`, true);
+        } else if (alreadyTracked.length > 0 && tickers.length === alreadyTracked.length) {
+            setWatchlistStatus(`Already tracked: ${alreadyTracked.join(", ")}`);
+        } else {
+            setWatchlistStatus(`Added: ${tickers.join(", ")}`);
+        }
+
+        input.value = "";
+        renderWatchlist(data.tickers);
+    } catch (err) {
+        setWatchlistStatus(String(err), true);
+    }
+}
+
+async function submitRemoveTickers() {
+    const input = document.getElementById("removeTickersInput");
+    const tickers = parseTickerInput(input.value);
+
+    if (tickers.length === 0) {
+        setWatchlistStatus("Enter at least one ticker to remove.", true);
+        return;
+    }
+
+    input.value = "";
+    await removeTickers(tickers);
+}
+
+// Shared by both the bulk "Remove" button and each chip's individual
+// (x) button, so there's one code path for removal regardless of how
+// many tickers or where the request came from.
+async function removeTickers(tickers) {
+    setWatchlistStatus(`Removing ${tickers.join(", ")}...`);
+
+    try {
+        const response = await fetch(`${API_BASE}/api/watchlist`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tickers }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `Server responded with ${response.status}`);
+        }
+
+        setWatchlistStatus(`Removed: ${tickers.join(", ")}`);
+        renderWatchlist(data.tickers);
+    } catch (err) {
+        setWatchlistStatus(String(err), true);
+    }
+}
+
+// Load the watchlist as soon as the page opens, so the user sees
+// their current tickers immediately rather than an empty section.
+loadWatchlist();
 </script>
 
 </body>

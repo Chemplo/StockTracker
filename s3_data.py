@@ -68,4 +68,4 @@ def delete_ticker_data(bucket: str, ticker: str) -> bool:
         return True
     except ClientError as exc:
         logger.error(f"Failed to delete s3://{bucket}/{key}: {exc}")
-        return Falsewa
+        return False
